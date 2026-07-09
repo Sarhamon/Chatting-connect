@@ -36,15 +36,9 @@ legacyForge {
     }
 }
 
-dependencies {
-    // 공용 로직 모듈. 컴파일 의존 + 아래 jar 블록에서 결과 클래스를 모드 jar에 포함한다.
-    implementation project(':common')
-}
-
-// common 모듈의 컴파일 결과를 Forge 모드 jar에 포함한다(순수 Java라 리맵 불필요).
-jar {
-    from project(':common').sourceSets.main.output
-}
+// 공용 로직(common)을 소스 레벨로 함께 컴파일해 모드 jar에 포함한다.
+// 순수 Java(MC 비의존)라 로더/매핑과 무관하게 그대로 컴파일되며, 크로스 프로젝트 번들링/리맵 이슈가 없다.
+sourceSets.main.java.srcDir "${rootProject.projectDir}/common/src/main/java"
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
