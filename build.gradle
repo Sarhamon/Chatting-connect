@@ -1,0 +1,5 @@
+// 루트 빌드 스크립트. 실제 로더별 설정은 각 서브프로젝트(common, chat-connect-*)에 있다.
+allprojects {
+    group = mod_group_id
+    version = mod_version
+}

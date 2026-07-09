@@ -1,0 +1,37 @@
+# Gradle
+.gradle/
+build/
+*/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Loader / dev run directories
+run/
+runs/
+*/run/
+*/runs/
+
+# ModDevGradle / Loom caches
+.neoforge/
+*/.neoforge/
+
+# IDE - IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# IDE - Eclipse / VSCode
+.eclipse/
+.classpath
+.project
+.settings/
+bin/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

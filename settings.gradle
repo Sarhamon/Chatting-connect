@@ -1,0 +1,19 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven { url = 'https://maven.neoforged.net/releases' }   // ModDevGradle (Forge/NeoForge)
+        maven { url = 'https://maven.fabricmc.net/' }            // Fabric Loom (다음 단계)
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'chatting-connect'
+
+include 'common'
+include 'chat-connect-forge'
+// 다음 단계에서 활성화:
+// include 'chat-connect-neoforge'
+// include 'chat-connect-fabric'
