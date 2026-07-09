@@ -1,5 +1,9 @@
 package com.chattingconnect.chzzk;
 
+import com.chattingconnect.chat.ChatClient;
+import com.chattingconnect.chat.ChatListener;
+import com.chattingconnect.chat.ChatMessage;
+import com.chattingconnect.chat.Platform;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -13,6 +17,9 @@ import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.function.Consumer;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -20,17 +27,10 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 치지직 비공식 채팅 수신 클라이언트. 마인크래프트 클래스에 의존하지 않는 순수 Java 구현이라
- * 다른 버전/로더로 그대로 포팅 가능하다. 연결 흐름: live-status → access-token → 웹소켓(cmd 프로토콜).
+ * 치지직 비공식 채팅 수신 클라이언트. 마인크래프트 클래스에 의존하지 않는 순수 Java 구현.
+ * 연결 흐름: live-status → access-token → 웹소켓(cmd 프로토콜).
  */
-public final class ChzzkClient {
-
-    /** 채팅/상태/오류를 바깥(마인크래프트 표시부)으로 전달하는 콜백. */
-    public interface ChatListener {
-        void onChat(String nickname, String message);
-        void onStatus(String status);
-        void onError(String message);
-    }
+public final class ChzzkClient implements ChatClient {
 
     private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
@@ -49,6 +49,7 @@ public final class ChzzkClient {
 
     private volatile WebSocket webSocket;
     private volatile boolean closed;
+    private volatile Consumer<String> debugSink;
 
     public ChzzkClient(String channelId, ChatListener listener) {
         this.channelId = channelId;
@@ -56,11 +57,18 @@ public final class ChzzkClient {
         this.scheduler = Executors.newSingleThreadScheduledExecutor(daemonFactory());
     }
 
-    /** 비동기로 연결을 시작한다. REST 조회는 블로킹이라 백그라운드 스레드에서 수행한다. */
+    @Override
+    public ChzzkClient debug(Consumer<String> sink) {
+        this.debugSink = sink;
+        return this;
+    }
+
+    @Override
     public void connect() {
         scheduler.execute(this::doConnect);
     }
 
+    @Override
     public void close() {
         closed = true;
         WebSocket ws = webSocket;
@@ -145,17 +153,22 @@ public final class ChzzkClient {
         }
         int cmd = obj.get("cmd").getAsInt();
         switch (cmd) {
-            case 0 -> sendRaw(PONG);                 // 서버 PING → PONG 응답
+            case 0 -> sendRaw(PONG);                              // 서버 PING → PONG 응답
             case 10100 -> listener.onStatus("연결됨 · 채팅 수신을 시작합니다.");
-            case 93101 -> emitChats(obj);            // 일반 채팅
-            default -> { /* 후원(93102) 등은 이번 범위 밖 */ }
+            case 93101 -> emitMessages(obj, ChatMessage.Type.CHAT, raw);       // 일반 채팅
+            case 93102 -> emitMessages(obj, ChatMessage.Type.DONATION, raw);   // 후원(치즈)
+            default -> { /* 기타 cmd 무시 */ }
         }
     }
 
-    private void emitChats(JsonObject obj) {
+    private void emitMessages(JsonObject obj, ChatMessage.Type type, String raw) {
         JsonElement bdyEl = obj.get("bdy");
         if (bdyEl == null || !bdyEl.isJsonArray()) {
             return;
+        }
+        Consumer<String> sink = debugSink;
+        if (sink != null) {
+            sink.accept(raw);
         }
         JsonArray bdy = bdyEl.getAsJsonArray();
         for (JsonElement el : bdy) {
@@ -164,14 +177,18 @@ public final class ChzzkClient {
             }
             JsonObject m = el.getAsJsonObject();
             String message = optString(m, "msg");
-            if (message.isEmpty()) {
+            JsonObject extras = parseExtras(m);
+            Map<String, String> emotes = parseEmotes(extras);
+            int payAmount = extras == null ? 0 : optInt(extras, "payAmount");
+            String nickname = parseNickname(m, extras);
+            if (message.isEmpty() && payAmount == 0 && emotes.isEmpty()) {
                 continue;
             }
-            listener.onChat(parseNickname(m), message);
+            listener.onMessage(new ChatMessage(Platform.CHZZK, type, nickname, message, emotes, payAmount));
         }
     }
 
-    private String parseNickname(JsonObject m) {
+    private String parseNickname(JsonObject m, JsonObject extras) {
         String profileStr = optString(m, "profile");
         if (!profileStr.isEmpty()) {
             try {
@@ -181,15 +198,58 @@ public final class ChzzkClient {
                     return nickname;
                 }
             } catch (Exception ignored) {
-                // 프로필 파싱 실패 시 익명 처리
+                // 프로필 파싱 실패 시 아래로
+            }
+        }
+        if (extras != null) {
+            String nickname = optString(extras, "nickname");
+            if (!nickname.isEmpty()) {
+                return nickname;
             }
         }
         return "익명";
     }
 
+    private JsonObject parseExtras(JsonObject m) {
+        String extrasStr = optString(m, "extras");
+        if (extrasStr.isEmpty()) {
+            return null;
+        }
+        try {
+            return GSON.fromJson(extrasStr, JsonObject.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Map<String, String> parseEmotes(JsonObject extras) {
+        Map<String, String> emotes = new LinkedHashMap<>();
+        if (extras == null || !extras.has("emojis") || !extras.get("emojis").isJsonObject()) {
+            return emotes;
+        }
+        for (Map.Entry<String, JsonElement> e : extras.getAsJsonObject("emojis").entrySet()) {
+            if (e.getValue() != null && e.getValue().isJsonPrimitive()) {
+                emotes.put(e.getKey(), e.getValue().getAsString());
+            }
+        }
+        return emotes;
+    }
+
     private static String optString(JsonObject obj, String key) {
         JsonElement el = obj.get(key);
-        return (el == null || el.isJsonNull()) ? "" : el.getAsString();
+        return (el == null || el.isJsonNull() || !el.isJsonPrimitive()) ? "" : el.getAsString();
+    }
+
+    private static int optInt(JsonObject obj, String key) {
+        JsonElement el = obj.get(key);
+        if (el == null || el.isJsonNull() || !el.isJsonPrimitive()) {
+            return 0;
+        }
+        try {
+            return el.getAsInt();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private void sendRaw(String text) {

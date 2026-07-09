@@ -26,6 +26,8 @@ legacyForge {
     runs {
         client {
             client()
+            // 개발용 클라이언트 창을 1600x900으로 연다.
+            programArguments.addAll '--width', '1600', '--height', '900'
         }
     }
 
@@ -39,6 +41,22 @@ legacyForge {
 // 공용 로직(common)을 소스 레벨로 함께 컴파일해 모드 jar에 포함한다.
 // 순수 Java(MC 비의존)라 로더/매핑과 무관하게 그대로 컴파일되며, 크로스 프로젝트 번들링/리맵 이슈가 없다.
 sourceSets.main.java.srcDir "${rootProject.projectDir}/common/src/main/java"
+
+// 이모티콘 인라인 렌더링을 위한 Mixin (FontSet에 커스텀 글리프 주입).
+mixin {
+    add sourceSets.main, "${mod_id}.refmap.json"
+    config "${mod_id}.mixins.json"
+}
+
+dependencies {
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+jar {
+    manifest.attributes([
+            'MixinConfigs': "${mod_id}.mixins.json"
+    ])
+}
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
@@ -66,3 +84,13 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
 }
 sourceSets.main.resources.srcDir generateModMetadata
 legacyForge.ideSyncTask generateModMetadata
+
+// 루트 ico/ 폴더의 플랫폼 로고 PNG를 모드 텍스처로 번들한다.
+// 파일명을 리소스 규칙에 맞게 정규화한다: 소문자 + 공백/"icon" 제거 (예: "chzzk Icon.png" → "chzzk.png").
+tasks.named('processResources').configure {
+    from("${rootProject.projectDir}/ico") {
+        include '*.png'
+        into 'assets/chattingconnect/textures/gui'
+        rename { String name -> name.toLowerCase().replaceAll('\\s*icon\\s*', '').replaceAll('\\s+', '') }
+    }
+}
