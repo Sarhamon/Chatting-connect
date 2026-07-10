@@ -1,6 +1,6 @@
 **English** | [한국어](README.ko.md)
 
-# Chatting Connect
+# Stream Chat Connect
 
 A Minecraft mod that relays Chzzk · Twitch live-stream chat into the in-game chat.
 

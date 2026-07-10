@@ -1,6 +1,6 @@
 [English](README.md) | **한국어**
 
-# Chatting Connect
+# Stream Chat Connect
 
 치지직 · 트위치 방송 채팅을 마인크래프트 채팅창에 연동하는 모드입니다.
 
