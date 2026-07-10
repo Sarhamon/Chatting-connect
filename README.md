@@ -1,90 +1,97 @@
+**English** | [한국어](README.ko.md)
+
 # Chatting Connect
 
-치지직 · 트위치 방송 채팅을 마인크래프트 채팅창에 연동하는 모드입니다.
+A Minecraft mod that relays Chzzk · Twitch live-stream chat into the in-game chat.
 
-**방송 채팅·후원·이모티콘을 게임 내 채팅창에 실시간 표시**합니다. (클라이언트 사이드 모드)
+**Displays stream chat, donations, and emotes in the in-game chat in real time.** (Client-side mod)
 
-> SOOP(아프리카) 연동도 구현되어 있으나, 미션 후원 처리가 아직 확인되지 않아 **현재 릴리스에서는 비활성화**되어 있습니다.
+> SOOP (AfreecaTV) integration is also implemented, but is **disabled in the current release** because mission-donation handling has not yet been verified.
 
-## 지원 목표
+## Supported Loaders
 
-| 로더 | 상태 | 비고 |
+| Loader | Status | Notes |
 | --- | --- | --- |
-| Forge | 지원 | MC 1.20.1 |
-| Fabric | 지원 | MC 1.20.1, Fabric API 필요 |
-| NeoForge | 지원 | MC 1.20.1 (`net.neoforged:forge` 47.1.x). 1.20.1에선 Forge와 API 동일해 forge 소스를 재사용, 1.20.2+에서 분기 |
+| Forge | Supported | MC 1.20.1 |
+| Fabric | Supported | MC 1.20.1, requires Fabric API |
+| NeoForge | Supported | MC 1.20.1 (`net.neoforged:forge` 47.1.x). API-identical to Forge on 1.20.1, so it reuses the Forge sources; diverges on 1.20.2+ |
 
-> 타겟 버전은 1.20.1로 시작하며, 이후 여러 버전으로 확장할 예정입니다.
+> The initial target is 1.20.1, with expansion to more versions planned.
 
-## 기능
+## Features
 
-- [x] 치지직 · 트위치 방송 채팅을 게임 채팅창에 실시간 표시
-- [x] 이모티콘 인라인 이미지 렌더링 (치지직 · 트위치)
-- [x] 후원/도네이션 표시 (치지직 치즈 · 트위치 비트)
-- [x] 연결 끊김 시 자동 재연결 · 마지막 채널 자동 접속
-- [~] SOOP(별풍선·영상 후원 구현됨) — 미션 후원 미해결로 현재 빌드에서 비활성화
-- [ ] 게임 채팅 입력 → 방송 채팅으로 송신 (예정)
+- [x] Display Chzzk · Twitch stream chat in the in-game chat in real time
+- [x] Inline emote image rendering (Chzzk · Twitch)
+- [x] Donation display (Chzzk cheese · Twitch bits)
+- [x] Auto-reconnect on disconnect · auto-connect to the last channel
+- [x] Forge · Fabric · NeoForge multi-loader support
+- [ ] In-game chat input → send to stream chat (planned)
 
-## 프로젝트 구조
+## Project Structure
 
 ```
 Chatting-connect/
-├── common/                 # 로더 비의존 공용 로직 (ChzzkClient 등, 순수 Java)
-├── chat-connect-forge/     # Forge 진입점 + 커맨드 + 이모티콘 렌더(믹스인)
-├── chat-connect-fabric/    # Fabric 진입점 + 커맨드 + 이모티콘 렌더(믹스인)
-├── chat-connect-neoforge/  # NeoForge 1.20.1 (build.gradle만; forge 소스 재사용)
-├── build.gradle            # 루트 빌드 스크립트
-├── settings.gradle         # 서브프로젝트 구성
-└── gradle.properties       # 공용 버전 · 모드 메타데이터
+├── common/                 # Loader-agnostic shared logic (ChzzkClient, etc., pure Java)
+├── chat-connect-forge/     # Forge entry point + commands + emote rendering (mixin)
+├── chat-connect-fabric/    # Fabric entry point + commands + emote rendering (mixin)
+├── chat-connect-neoforge/  # NeoForge 1.20.1 (build.gradle only; reuses Forge sources)
+├── build.gradle            # Root build script
+├── settings.gradle         # Subproject configuration
+└── gradle.properties       # Shared versions · mod metadata
 ```
 
-공용 로직은 `common` 모듈에 두고, 각 로더 모듈이 이를 의존해 자신의 모드 jar에 포함합니다.
-로더별로 다른 것은 진입점 · 커맨드 · 채팅 표시 같은 얇은 어댑터 계층뿐입니다.
+The shared logic lives in the `common` module; each loader module depends on it and bundles it into its own mod jar. Only the entry point, commands, and chat display — a thin adapter layer — differ per loader.
 
-## 빌드
+## Building
 
-모드는 **Java 17**을 타깃하지만(각 모듈 toolchain), Fabric Loom 1.12 요구사항으로 **Gradle 데몬은 Java 21+** 에서 실행됩니다(`gradle/gradle-daemon-jvm.properties`). Java 21이 없으면 Gradle이 toolchain 자동 프로비저닝으로 받아옵니다.
+The mod targets **Java 17** (per-module toolchain), but the **Gradle daemon runs on Java 21+** due to Fabric Loom 1.12's requirement (`gradle/gradle-daemon-jvm.properties`). If Java 21 is not installed, Gradle provisions it automatically via the toolchain resolver.
 
 ```bash
-# Forge 모드 빌드 / 실행
+# Build / run Forge
 ./gradlew :chat-connect-forge:build
 ./gradlew :chat-connect-forge:runClient
 
-# Fabric 모드 빌드 / 실행 (개발 실행 시 Fabric API 자동 포함)
+# Build / run Fabric (Fabric API is included automatically in the dev run)
 ./gradlew :chat-connect-fabric:build
 ./gradlew :chat-connect-fabric:runClient
 
-# NeoForge 모드 빌드 / 실행
+# Build / run NeoForge
 ./gradlew :chat-connect-neoforge:build
 ./gradlew :chat-connect-neoforge:runClient
 ```
 
-빌드 결과물: `chat-connect-<loader>/build/libs/`
+Build output: `chat-connect-<loader>/build/libs/`
 
-## 사용법
+## Installation
 
-게임 내에서 클라이언트 커맨드로 연결합니다. (클라이언트 사이드 모드라 서버 접속 여부와 무관하게 동작)
+1. Install a mod loader (Forge · Fabric · NeoForge, **MC 1.20.1**).
+2. Put the matching `chattingconnect-<loader>-1.20.1-*.jar` into your `mods` folder.
+3. **On Fabric, also install [Fabric API](https://modrinth.com/mod/fabric-api)** into `mods`. (Forge/NeoForge need no extra dependency.)
+4. This is a client-side mod, so it does not need to be installed on the server.
+
+## Usage
+
+Connect via client commands in-game. (As a client-side mod, it works whether or not you're on a server.)
 
 ```
-/chzzk  connect <channelId>   # 치지직 채널 (channelId = chzzk.naver.com/<channelId>)
-/twitch connect <login>       # 트위치 채널 (login = 로그인명, 소문자 영문)
+/chzzk  connect <channelId>   # Chzzk channel (channelId = chzzk.naver.com/<channelId>)
+/twitch connect <login>       # Twitch channel (login = login name, lowercase)
 
-/<플랫폼> disconnect          # 연결 종료
+/<platform> disconnect        # Disconnect
 ```
 
-한 번 연결한 채널은 `config/chattingconnect.json` 에 저장되어, 다음 실행 시 자동으로 다시 접속합니다.
-`disconnect` 하면 저장이 삭제되어 자동 접속하지 않습니다.
+A connected channel is saved to `config/chattingconnect.json` and auto-connects on the next launch.
+Running `disconnect` clears the saved entry so it won't auto-connect.
 
-## 연동 방식
+## How It Works
 
-외부 라이브러리 없이 Java 표준 `java.net.http`(HttpClient · WebSocket) + 마인크래프트 번들 Gson만 사용합니다.
+Uses only the Java standard `java.net.http` (HttpClient · WebSocket) + Minecraft's bundled Gson — no external libraries.
 
-- **치지직 · SOOP**: **비공식 내부 API**(REST로 채팅 채널/토큰 조회 → 웹소켓 수신). 안정화·배포 단계에서 공식 API 전환을 검토합니다.
-- **트위치**: 공개 **IRC-over-WebSocket**(`irc-ws.chat.twitch.tv`)에 인증 없이 **익명 읽기 전용**으로 접속합니다. 트위치 1차 이모티콘과 비트(cheer)만 지원하며, 서드파티 이모티콘(BTTV/FFZ/7TV)과 외부 현금 도네이션은 채팅 프로토콜에 포함되지 않아 지원하지 않습니다.
+- **Chzzk · SOOP**: **unofficial internal APIs** (REST to look up the chat channel/token → WebSocket receive). Migration to official APIs is under consideration for the stabilization/release phase.
+- **Twitch**: connects to the public **IRC-over-WebSocket** (`irc-ws.chat.twitch.tv`) anonymously, read-only. Only first-party Twitch emotes and bits (cheers) are supported; third-party emotes (BTTV/FFZ/7TV) and external cash donations are not part of the chat protocol and are not supported.
 
-## 라이선스
+## License
 
 [MIT License](LICENSE.md) © 2026 sarhamon
 
-> 이 모드는 치지직·SOOP의 **비공식 내부 API**와 트위치 IRC를 사용합니다. MIT는 이 프로젝트 **코드**에만 적용되며,
-> 각 플랫폼의 서비스 약관 준수 책임은 사용자에게 있습니다.
+> This mod uses the **unofficial internal APIs** of Chzzk · SOOP and Twitch IRC. MIT applies only to this project's **code**; complying with each platform's terms of service is the user's responsibility.
