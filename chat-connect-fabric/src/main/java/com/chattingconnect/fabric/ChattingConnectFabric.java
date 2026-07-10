@@ -1,21 +1,25 @@
-package com.chattingconnect.forge;
+package com.chattingconnect.fabric;
 
 import com.chattingconnect.chat.ChatClient;
 import com.chattingconnect.chat.ChatListener;
 import com.chattingconnect.chat.ChatMessage;
 import com.chattingconnect.chat.Platform;
 import com.chattingconnect.chzzk.ChzzkClient;
-import com.chattingconnect.forge.emote.EmoteManager;
+import com.chattingconnect.fabric.emote.EmoteManager;
 import com.chattingconnect.soop.SoopClient;
 import com.chattingconnect.twitch.TwitchClient;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.logging.LogUtils;
+import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 
 import java.util.EnumMap;
@@ -24,12 +28,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Forge 진입점. 클라이언트 사이드 채팅 연동 모드로, 여러 플랫폼(치지직·SOOP)의 방송 채팅·후원을
- * 마인크래프트 채팅창에 표시한다. 연결 관리는 정적 메서드로 노출하고, 커맨드 등록은 {@link ForgeClientCommands}가 담당한다.
+ * Fabric 진입점(클라이언트). 여러 플랫폼(치지직·SOOP·트위치)의 방송 채팅·후원을 마인크래프트 채팅창에 표시한다.
+ * 연결/표시 로직은 Forge 모듈과 동일하며, 로더 고유부(커맨드 등록·자동 접속·설정 경로)만 Fabric API를 쓴다.
  */
-@Mod(ChattingConnectForge.MODID)
-public class ChattingConnectForge {
-    public static final String MODID = "chattingconnect";
+public class ChattingConnectFabric implements ClientModInitializer {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     /** 치지직 이모티콘 토큰: {@code {:key:}} */
@@ -56,13 +58,36 @@ public class ChattingConnectForge {
         }
     };
 
-    public ChattingConnectForge() {
-        // 커맨드 등록은 ForgeClientCommands가 담당. 클라이언트 초기화 완료 시 저장된 채널로 자동 접속한다.
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onClientSetup);
+    @Override
+    public void onInitializeClient() {
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            dispatcher.register(platformCommand("chzzk", Platform.CHZZK));
+            dispatcher.register(platformCommand("soop", Platform.SOOP));
+            dispatcher.register(platformCommand("twitch", Platform.TWITCH));
+        });
+        // 클라이언트가 완전히 시작되면 저장된 채널로 자동 접속한다.
+        ClientLifecycleEvents.CLIENT_STARTED.register(client ->
+                ChatConfig.load().forEach(ChattingConnectFabric::connect));
     }
 
-    private void onClientSetup(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> ChatConfig.load().forEach(ChattingConnectForge::connect));
+    private static LiteralArgumentBuilder<FabricClientCommandSource> platformCommand(String name, Platform platform) {
+        return ClientCommandManager.literal(name)
+                .then(ClientCommandManager.literal("connect")
+                        .then(ClientCommandManager.argument("id", StringArgumentType.word())
+                                .executes(ctx -> {
+                                    connect(platform, StringArgumentType.getString(ctx, "id"));
+                                    return 1;
+                                })))
+                .then(ClientCommandManager.literal("disconnect")
+                        .executes(ctx -> {
+                            if (isConnected(platform)) {
+                                disconnect(platform);
+                                ctx.getSource().sendFeedback(Component.literal(platform.displayName() + " 연결을 종료했습니다."));
+                            } else {
+                                ctx.getSource().sendError(Component.literal("연결된 채널이 없습니다."));
+                            }
+                            return 1;
+                        }));
     }
 
     public static synchronized void connect(Platform platform, String id) {

@@ -22,6 +22,7 @@ public final class ForgeClientCommands {
     public static void onRegisterClientCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(platformCommand("chzzk", Platform.CHZZK));
         event.getDispatcher().register(platformCommand("soop", Platform.SOOP));
+        event.getDispatcher().register(platformCommand("twitch", Platform.TWITCH));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> platformCommand(String name, Platform platform) {

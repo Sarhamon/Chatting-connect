@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.chattingconnect.fabric.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "chattingconnect.refmap.json",
+  "client": [
+    "FontSetMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

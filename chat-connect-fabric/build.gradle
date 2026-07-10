@@ -1,0 +1,51 @@
+plugins {
+    id 'java-library'
+    id 'fabric-loom' version '1.12.+'
+}
+
+base {
+    archivesName = "${mod_id}-fabric-${minecraft_version}"
+}
+
+// Mojang ships Java 17 for 1.20.1, so mods target Java 17.
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    // Forge 모듈과 동일하게 Mojang 공식 매핑 사용 → 믹스인 소스가 로더 간 동일.
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+
+    // common 소스는 아래 srcDir로 함께 컴파일되며, MC 번들 Gson이 런타임에 제공된다.
+    compileOnly 'com.google.code.gson:gson:2.10.1'
+}
+
+// 공용 로직(common)을 소스 레벨로 함께 컴파일해 모드 jar에 포함한다(Forge 모듈과 동일 전략).
+// 순수 Java(MC 비의존)라 로더/매핑과 무관하게 그대로 컴파일되며, 크로스 프로젝트 번들링/리맵 이슈가 없다.
+sourceSets.main.java.srcDir "${rootProject.projectDir}/common/src/main/java"
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// fabric.mod.json 의 ${version} 등에 gradle.properties 값을 치환한다.
+processResources {
+    def props = [
+            version    : project.version,
+            mod_id     : mod_id,
+            mod_name   : mod_name,
+            mod_license: mod_license,
+            mod_description: mod_description,
+            minecraft_version_range: minecraft_version_range,
+            fabric_loader_version  : fabric_loader_version
+    ]
+    inputs.properties props
+    filesMatching("fabric.mod.json") {
+        expand props
+    }
+}

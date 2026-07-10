@@ -3,7 +3,8 @@ package com.chattingconnect.chat;
 /** 지원하는 방송 플랫폼. */
 public enum Platform {
     CHZZK("치지직"),
-    SOOP("SOOP");
+    SOOP("SOOP"),
+    TWITCH("트위치");
 
     private final String displayName;
 

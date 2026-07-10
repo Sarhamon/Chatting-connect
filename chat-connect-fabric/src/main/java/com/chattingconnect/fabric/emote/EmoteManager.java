@@ -1,4 +1,4 @@
-package com.chattingconnect.forge.emote;
+package com.chattingconnect.fabric.emote;
 
 import com.mojang.blaze3d.font.GlyphInfo;
 import com.mojang.blaze3d.platform.NativeImage;

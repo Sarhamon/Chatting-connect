@@ -22,9 +22,12 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 치지직 비공식 채팅 수신 클라이언트. 마인크래프트 클래스에 의존하지 않는 순수 Java 구현.
@@ -50,6 +53,9 @@ public final class ChzzkClient implements ChatClient {
     private volatile WebSocket webSocket;
     private volatile boolean closed;
     private volatile Consumer<String> debugSink;
+    private volatile ScheduledFuture<?> pingTask;
+    private final AtomicBoolean reconnectPending = new AtomicBoolean(false);
+    private volatile int reconnectAttempts;
 
     public ChzzkClient(String channelId, ChatListener listener) {
         this.channelId = channelId;
@@ -85,7 +91,10 @@ public final class ChzzkClient implements ChatClient {
             JsonObject content = liveStatus.getAsJsonObject("content");
             JsonElement chatChannelIdEl = content == null ? null : content.get("chatChannelId");
             if (chatChannelIdEl == null || chatChannelIdEl.isJsonNull()) {
-                listener.onError("채널을 찾을 수 없거나 채팅 채널이 없습니다. 채널 ID와 방송 상태를 확인하세요.");
+                if (reconnectAttempts == 0) {
+                    listener.onError("채널을 찾을 수 없거나 채팅 채널이 없습니다. 채널 ID와 방송 상태를 확인하세요.");
+                }
+                scheduleReconnect();
                 return;
             }
             String chatChannelId = chatChannelIdEl.getAsString();
@@ -100,13 +109,48 @@ public final class ChzzkClient implements ChatClient {
                     .connectTimeout(Duration.ofSeconds(10))
                     .buildAsync(URI.create(WS_URL), new WsListener(connectFrame))
                     .exceptionally(ex -> {
-                        listener.onError("웹소켓 연결 실패: " + ex.getMessage());
+                        if (reconnectAttempts == 0) {
+                            listener.onError("웹소켓 연결 실패: " + ex.getMessage());
+                        }
+                        scheduleReconnect();
                         return null;
                     });
         } catch (Exception e) {
             if (!closed) {
-                listener.onError("연결 중 오류: " + e.getMessage());
+                if (reconnectAttempts == 0) {
+                    listener.onError("연결 중 오류: " + e.getMessage());
+                }
+                scheduleReconnect();
             }
+        }
+    }
+
+    /** 연결이 끊기면 지수 백오프(최대 24초)로 재접속을 예약한다. close() 이후에는 동작하지 않는다. */
+    private void scheduleReconnect() {
+        if (closed || !reconnectPending.compareAndSet(false, true)) {
+            return;
+        }
+        cancelPing();
+        long delay = Math.min(3L << Math.min(reconnectAttempts, 3), 30L);
+        if (reconnectAttempts == 0) {
+            listener.onStatus("연결이 끊겼습니다. 재연결을 시도합니다...");
+        }
+        reconnectAttempts++;
+        try {
+            scheduler.schedule(() -> {
+                reconnectPending.set(false);
+                doConnect();
+            }, delay, TimeUnit.SECONDS);
+        } catch (RejectedExecutionException e) {
+            reconnectPending.set(false);
+        }
+    }
+
+    private void cancelPing() {
+        ScheduledFuture<?> t = pingTask;
+        if (t != null) {
+            t.cancel(false);
+            pingTask = null;
         }
     }
 
@@ -154,7 +198,10 @@ public final class ChzzkClient implements ChatClient {
         int cmd = obj.get("cmd").getAsInt();
         switch (cmd) {
             case 0 -> sendRaw(PONG);                              // 서버 PING → PONG 응답
-            case 10100 -> listener.onStatus("연결됨 · 채팅 수신을 시작합니다.");
+            case 10100 -> {                                      // 접속 성공
+                reconnectAttempts = 0;
+                listener.onStatus("연결됨 · 채팅 수신을 시작합니다.");
+            }
             case 93101 -> emitMessages(obj, ChatMessage.Type.CHAT, raw);       // 일반 채팅
             case 93102 -> emitMessages(obj, ChatMessage.Type.DONATION, raw);   // 후원(치즈)
             default -> { /* 기타 cmd 무시 */ }
@@ -281,7 +328,8 @@ public final class ChzzkClient implements ChatClient {
             webSocket = ws;
             ws.request(1);
             ws.sendText(connectFrame, true);
-            scheduler.scheduleAtFixedRate(() -> sendRaw(PING), 20, 20, TimeUnit.SECONDS);
+            cancelPing();
+            pingTask = scheduler.scheduleAtFixedRate(() -> sendRaw(PING), 20, 20, TimeUnit.SECONDS);
         }
 
         @Override
@@ -298,16 +346,12 @@ public final class ChzzkClient implements ChatClient {
 
         @Override
         public void onError(WebSocket ws, Throwable error) {
-            if (!closed) {
-                listener.onError("웹소켓 오류: " + error.getMessage());
-            }
+            scheduleReconnect();
         }
 
         @Override
         public CompletionStage<?> onClose(WebSocket ws, int statusCode, String reason) {
-            if (!closed) {
-                listener.onStatus("연결이 종료되었습니다.");
-            }
+            scheduleReconnect();
             return null;
         }
     }

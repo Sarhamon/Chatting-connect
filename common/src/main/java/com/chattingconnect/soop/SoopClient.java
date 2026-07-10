@@ -21,9 +21,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -60,6 +63,9 @@ public final class SoopClient implements ChatClient {
     private volatile boolean closed;
     private volatile Consumer<String> debugSink;
     private volatile String chatNo;
+    private volatile ScheduledFuture<?> pingTask;
+    private final AtomicBoolean reconnectPending = new AtomicBoolean(false);
+    private volatile int reconnectAttempts;
 
     public SoopClient(String streamerId, ChatListener listener) {
         this.streamerId = streamerId;
@@ -93,14 +99,20 @@ public final class SoopClient implements ChatClient {
             JsonObject channel = fetchChannel();
             int result = optInt(channel, "RESULT");
             if (result == 0) {
-                listener.onError("방송 중이 아니거나 채널을 찾을 수 없습니다: " + streamerId);
+                if (reconnectAttempts == 0) {
+                    listener.onError("방송 중이 아니거나 채널을 찾을 수 없습니다: " + streamerId);
+                }
+                scheduleReconnect();
                 return;
             }
             String domain = optString(channel, "CHDOMAIN").toLowerCase();
             String chatPort = optString(channel, "CHPT");
             this.chatNo = optString(channel, "CHATNO");
             if (domain.isEmpty() || chatPort.isEmpty() || chatNo.isEmpty()) {
-                listener.onError("채팅 서버 정보를 가져오지 못했습니다.");
+                if (reconnectAttempts == 0) {
+                    listener.onError("채팅 서버 정보를 가져오지 못했습니다.");
+                }
+                scheduleReconnect();
                 return;
             }
             int wsPort = Integer.parseInt(chatPort) + 1;
@@ -111,13 +123,48 @@ public final class SoopClient implements ChatClient {
                     .connectTimeout(Duration.ofSeconds(10))
                     .buildAsync(uri, new WsListener())
                     .exceptionally(ex -> {
-                        listener.onError("웹소켓 연결 실패: " + ex.getMessage());
+                        if (reconnectAttempts == 0) {
+                            listener.onError("웹소켓 연결 실패: " + ex.getMessage());
+                        }
+                        scheduleReconnect();
                         return null;
                     });
         } catch (Exception e) {
             if (!closed) {
-                listener.onError("연결 중 오류: " + e.getMessage());
+                if (reconnectAttempts == 0) {
+                    listener.onError("연결 중 오류: " + e.getMessage());
+                }
+                scheduleReconnect();
             }
+        }
+    }
+
+    /** 연결이 끊기면 지수 백오프(최대 24초)로 재접속을 예약한다. close() 이후에는 동작하지 않는다. */
+    private void scheduleReconnect() {
+        if (closed || !reconnectPending.compareAndSet(false, true)) {
+            return;
+        }
+        cancelPing();
+        long delay = Math.min(3L << Math.min(reconnectAttempts, 3), 30L);
+        if (reconnectAttempts == 0) {
+            listener.onStatus("연결이 끊겼습니다. 재연결을 시도합니다...");
+        }
+        reconnectAttempts++;
+        try {
+            scheduler.schedule(() -> {
+                reconnectPending.set(false);
+                doConnect();
+            }, delay, TimeUnit.SECONDS);
+        } catch (RejectedExecutionException e) {
+            reconnectPending.set(false);
+        }
+    }
+
+    private void cancelPing() {
+        ScheduledFuture<?> t = pingTask;
+        if (t != null) {
+            t.cancel(false);
+            pingTask = null;
         }
     }
 
@@ -177,7 +224,9 @@ public final class SoopClient implements ChatClient {
         switch (code) {
             case C_CONNECT -> sendRaw(packet(C_ENTER, SEP + chatNo + SEP.repeat(5))); // 접속 승인 → 채팅방 입장
             case C_ENTER -> {                                                          // 입장 승인 → 핑 시작
-                scheduler.scheduleAtFixedRate(this::sendPing, 60, 60, TimeUnit.SECONDS);
+                reconnectAttempts = 0;
+                cancelPing();
+                pingTask = scheduler.scheduleAtFixedRate(this::sendPing, 60, 60, TimeUnit.SECONDS);
                 listener.onStatus("연결됨 · 채팅 수신을 시작합니다.");
             }
             case C_CHAT -> emitChat(pkt);
@@ -302,16 +351,12 @@ public final class SoopClient implements ChatClient {
 
         @Override
         public void onError(WebSocket ws, Throwable error) {
-            if (!closed) {
-                listener.onError("웹소켓 오류: " + error.getMessage());
-            }
+            scheduleReconnect();
         }
 
         @Override
         public CompletionStage<?> onClose(WebSocket ws, int statusCode, String reason) {
-            if (!closed) {
-                listener.onStatus("연결이 종료되었습니다.");
-            }
+            scheduleReconnect();
             return null;
         }
     }
