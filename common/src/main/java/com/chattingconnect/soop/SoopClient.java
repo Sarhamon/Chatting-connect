@@ -66,6 +66,8 @@ public final class SoopClient implements ChatClient {
     private volatile ScheduledFuture<?> pingTask;
     private final AtomicBoolean reconnectPending = new AtomicBoolean(false);
     private volatile int reconnectAttempts;
+    /** 진단용: 처음 보는 서비스 코드를 한 번씩만 로깅한다(미션 후원 등 미지원 패킷의 코드·필드 배치 식별용). */
+    private final java.util.Set<String> loggedUnknownCodes = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public SoopClient(String streamerId, ChatListener listener) {
         this.streamerId = streamerId;
@@ -232,7 +234,11 @@ public final class SoopClient implements ChatClient {
             case C_CHAT -> emitChat(pkt);
             case C_TEXT_DONATION -> emitDonation(pkt, 3, 4);   // fromUsername=parts[3], amount=parts[4]
             case C_VIDEO_DONATION -> emitDonation(pkt, 4, 5);  // fromUsername=parts[4], amount=parts[5]
-            default -> { /* 입장/퇴장/시청자 등 무시 */ }
+            default -> {                                       // 미지원 패킷: 처음 보는 코드만 1회 로깅(진단)
+                if (loggedUnknownCodes.add(code)) {
+                    debug("[UNKNOWN code=" + code + "] " + pkt.replace(SEP, "|"));
+                }
+            }
         }
     }
 

@@ -1,8 +1,10 @@
 # Chatting Connect
 
-치지직 · 아프리카(SOOP) · 트위치 등 방송 채팅을 마인크래프트 채팅창에 연동하는 모드입니다.
+치지직 · 트위치 방송 채팅을 마인크래프트 채팅창에 연동하는 모드입니다.
 
 **방송 채팅·후원·이모티콘을 게임 내 채팅창에 실시간 표시**합니다. (클라이언트 사이드 모드)
+
+> SOOP(아프리카) 연동도 구현되어 있으나, 미션 후원 처리가 아직 확인되지 않아 **현재 릴리스에서는 비활성화**되어 있습니다.
 
 ## 지원 목표
 
@@ -10,18 +12,18 @@
 | --- | --- | --- |
 | Forge | 지원 | MC 1.20.1 |
 | Fabric | 지원 | MC 1.20.1, Fabric API 필요 |
-| NeoForge | 예정 | 1.20.1에서는 Forge와 사실상 동일, 1.20.2+에서 분기 |
+| NeoForge | 지원 | MC 1.20.1 (`net.neoforged:forge` 47.1.x). 1.20.1에선 Forge와 API 동일해 forge 소스를 재사용, 1.20.2+에서 분기 |
 
 > 타겟 버전은 1.20.1로 시작하며, 이후 여러 버전으로 확장할 예정입니다.
 
 ## 기능
 
-- [x] 치지직 · SOOP · 트위치 방송 채팅을 게임 채팅창에 실시간 표시
+- [x] 치지직 · 트위치 방송 채팅을 게임 채팅창에 실시간 표시
 - [x] 이모티콘 인라인 이미지 렌더링 (치지직 · 트위치)
-- [x] 후원/도네이션 표시 (치지직 치즈 · SOOP 별풍선 · 트위치 비트)
+- [x] 후원/도네이션 표시 (치지직 치즈 · 트위치 비트)
 - [x] 연결 끊김 시 자동 재연결 · 마지막 채널 자동 접속
+- [~] SOOP(별풍선·영상 후원 구현됨) — 미션 후원 미해결로 현재 빌드에서 비활성화
 - [ ] 게임 채팅 입력 → 방송 채팅으로 송신 (예정)
-- [ ] 씨미(CeeMe) 지원 (예정)
 
 ## 프로젝트 구조
 
@@ -30,7 +32,7 @@ Chatting-connect/
 ├── common/                 # 로더 비의존 공용 로직 (ChzzkClient 등, 순수 Java)
 ├── chat-connect-forge/     # Forge 진입점 + 커맨드 + 이모티콘 렌더(믹스인)
 ├── chat-connect-fabric/    # Fabric 진입점 + 커맨드 + 이모티콘 렌더(믹스인)
-├── chat-connect-neoforge/  # NeoForge 진입점 (예정)
+├── chat-connect-neoforge/  # NeoForge 1.20.1 (build.gradle만; forge 소스 재사용)
 ├── build.gradle            # 루트 빌드 스크립트
 ├── settings.gradle         # 서브프로젝트 구성
 └── gradle.properties       # 공용 버전 · 모드 메타데이터
@@ -51,6 +53,10 @@ Chatting-connect/
 # Fabric 모드 빌드 / 실행 (개발 실행 시 Fabric API 자동 포함)
 ./gradlew :chat-connect-fabric:build
 ./gradlew :chat-connect-fabric:runClient
+
+# NeoForge 모드 빌드 / 실행
+./gradlew :chat-connect-neoforge:build
+./gradlew :chat-connect-neoforge:runClient
 ```
 
 빌드 결과물: `chat-connect-<loader>/build/libs/`
@@ -61,7 +67,6 @@ Chatting-connect/
 
 ```
 /chzzk  connect <channelId>   # 치지직 채널 (channelId = chzzk.naver.com/<channelId>)
-/soop   connect <streamerId>  # SOOP 채널 (streamerId = BJ 아이디)
 /twitch connect <login>       # 트위치 채널 (login = 로그인명, 소문자 영문)
 
 /<플랫폼> disconnect          # 연결 종료

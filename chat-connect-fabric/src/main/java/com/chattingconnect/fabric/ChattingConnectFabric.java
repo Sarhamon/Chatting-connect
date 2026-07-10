@@ -62,8 +62,9 @@ public class ChattingConnectFabric implements ClientModInitializer {
     public void onInitializeClient() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             dispatcher.register(platformCommand("chzzk", Platform.CHZZK));
-            dispatcher.register(platformCommand("soop", Platform.SOOP));
             dispatcher.register(platformCommand("twitch", Platform.TWITCH));
+            // SOOP: 미션 후원 미해결로 이번 릴리스에서 제외. 재활성화 시 아래 주석 해제.
+            // dispatcher.register(platformCommand("soop", Platform.SOOP));
         });
         // 클라이언트가 완전히 시작되면 저장된 채널로 자동 접속한다.
         ClientLifecycleEvents.CLIENT_STARTED.register(client ->

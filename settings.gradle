@@ -15,5 +15,4 @@ rootProject.name = 'chatting-connect'
 include 'common'
 include 'chat-connect-forge'
 include 'chat-connect-fabric'
-// 다음 단계에서 활성화:
-// include 'chat-connect-neoforge'
+include 'chat-connect-neoforge'

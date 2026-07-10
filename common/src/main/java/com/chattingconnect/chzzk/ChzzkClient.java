@@ -56,6 +56,8 @@ public final class ChzzkClient implements ChatClient {
     private volatile ScheduledFuture<?> pingTask;
     private final AtomicBoolean reconnectPending = new AtomicBoolean(false);
     private volatile int reconnectAttempts;
+    /** 진단용: 처음 보는 cmd를 한 번씩만 로깅한다(미션 후원 등 미지원 메시지의 cmd·구조 식별용). */
+    private final java.util.Set<Integer> loggedUnknownCmds = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public ChzzkClient(String channelId, ChatListener listener) {
         this.channelId = channelId;
@@ -204,7 +206,14 @@ public final class ChzzkClient implements ChatClient {
             }
             case 93101 -> emitMessages(obj, ChatMessage.Type.CHAT, raw);       // 일반 채팅
             case 93102 -> emitMessages(obj, ChatMessage.Type.DONATION, raw);   // 후원(치즈)
-            default -> { /* 기타 cmd 무시 */ }
+            default -> {                                         // 미지원 cmd: 처음 보는 것만 1회 로깅(진단)
+                if (loggedUnknownCmds.add(cmd)) {
+                    Consumer<String> sink = debugSink;
+                    if (sink != null) {
+                        sink.accept("[UNKNOWN cmd=" + cmd + "] " + raw);
+                    }
+                }
+            }
         }
     }
 

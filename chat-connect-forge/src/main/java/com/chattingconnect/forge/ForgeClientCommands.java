@@ -21,8 +21,9 @@ public final class ForgeClientCommands {
     @SubscribeEvent
     public static void onRegisterClientCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(platformCommand("chzzk", Platform.CHZZK));
-        event.getDispatcher().register(platformCommand("soop", Platform.SOOP));
         event.getDispatcher().register(platformCommand("twitch", Platform.TWITCH));
+        // SOOP: 미션 후원 미해결로 이번 릴리스에서 제외. 재활성화 시 아래 주석 해제.
+        // event.getDispatcher().register(platformCommand("soop", Platform.SOOP));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> platformCommand(String name, Platform platform) {

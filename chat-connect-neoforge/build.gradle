@@ -1,3 +1,7 @@
+// NeoForge 1.20.1 모듈.
+// 1.20.1에서 NeoForge(net.neoforged:forge 47.1.x)는 MinecraftForge와 API가 동일(net.minecraftforge 패키지·mods.toml·SRG)하므로,
+// 소스를 복제하지 않고 forge 모듈의 자바 소스/리소스/템플릿을 그대로 재사용한다. build.gradle 만 neoForgeVersion 으로 다르다.
+// (API가 분기하는 1.20.2+ NeoForge는 향후 별도 소스 트리로 추가한다.)
 plugins {
     id 'idea'
     id 'java-library'
@@ -5,10 +9,9 @@ plugins {
 }
 
 base {
-    archivesName = "${mod_id}-forge-${minecraft_version}"
+    archivesName = "${mod_id}-neoforge-${minecraft_version}"
 }
 
-// Mojang ships Java 17 for 1.20.1, so mods target Java 17.
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 repositories {
@@ -16,7 +19,10 @@ repositories {
 }
 
 legacyForge {
-    version = project.minecraft_version + '-' + project.forge_version
+    // MinecraftForge(version=…) 대신 NeoForge 1.20.1(net.neoforged:forge) 을 대상으로 한다.
+    enable {
+        neoForgeVersion = project.neoforge_version
+    }
 
     parchment {
         mappingsVersion = project.parchment_mappings_version
@@ -26,7 +32,6 @@ legacyForge {
     runs {
         client {
             client()
-            // 개발용 클라이언트 창을 1600x900으로 연다.
             programArguments.addAll '--width', '1600', '--height', '900'
         }
     }
@@ -38,11 +43,13 @@ legacyForge {
     }
 }
 
-// 공용 로직(common)을 소스 레벨로 함께 컴파일해 모드 jar에 포함한다.
-// 순수 Java(MC 비의존)라 로더/매핑과 무관하게 그대로 컴파일되며, 크로스 프로젝트 번들링/리맵 이슈가 없다.
+// 공용 로직(common) + forge 모듈의 로더별 소스를 소스 레벨로 함께 컴파일한다.
 sourceSets.main.java.srcDir "${rootProject.projectDir}/common/src/main/java"
+sourceSets.main.java.srcDir "${rootProject.projectDir}/chat-connect-forge/src/main/java"
+// 이모티콘 텍스처(assets) + 믹스인 설정도 forge 모듈 리소스를 재사용한다.
+sourceSets.main.resources.srcDir "${rootProject.projectDir}/chat-connect-forge/src/main/resources"
 
-// 이모티콘 인라인 렌더링을 위한 Mixin (FontSet에 커스텀 글리프 주입).
+// 이모티콘 인라인 렌더링을 위한 Mixin (forge 모듈과 동일한 config/refmap).
 mixin {
     add sourceSets.main, "${mod_id}.refmap.json"
     config "${mod_id}.mixins.json"
@@ -62,10 +69,7 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
-// 플랫폼 아이콘 텍스처는 src/main/resources/assets/chattingconnect/textures/gui/ 에 둔 128px 사본을 사용한다.
-// (원본 고해상도는 루트 ico/ 에 보존. 새 플랫폼 추가 시 다운스케일 PNG를 위 리소스 경로에 직접 넣는다.)
-
-// src/main/templates 의 mods.toml/pack.mcmeta 에 gradle.properties 값을 치환해 넣는다.
+// forge 모듈의 mods.toml/pack.mcmeta 템플릿에 gradle.properties 값을 치환해 넣는다.
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
     var replaceProperties = [
             minecraft_version       : minecraft_version,
@@ -82,7 +86,7 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
     ]
     inputs.properties replaceProperties
     expand replaceProperties
-    from "src/main/templates"
+    from "${rootProject.projectDir}/chat-connect-forge/src/main/templates"
     into "build/generated/sources/modMetadata"
 }
 sourceSets.main.resources.srcDir generateModMetadata
