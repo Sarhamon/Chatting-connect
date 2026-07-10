@@ -88,6 +88,7 @@ Running `disconnect` clears the saved entry so it won't auto-connect.
 Uses only the Java standard `java.net.http` (HttpClient · WebSocket) + Minecraft's bundled Gson — no external libraries.
 
 - **Chzzk · SOOP**: **unofficial internal APIs** (REST to look up the chat channel/token → WebSocket receive). Migration to official APIs is under consideration for the stabilization/release phase.
+  - On Chzzk, only **text (in-chat) cheese donations** are received. **Video and mission donations** are delivered only to the streamer's alert overlay (a separate, authenticated channel), not to public chat, so a viewer-side client cannot receive them.
 - **Twitch**: connects to the public **IRC-over-WebSocket** (`irc-ws.chat.twitch.tv`) anonymously, read-only. Only first-party Twitch emotes and bits (cheers) are supported; third-party emotes (BTTV/FFZ/7TV) and external cash donations are not part of the chat protocol and are not supported.
 
 ## License

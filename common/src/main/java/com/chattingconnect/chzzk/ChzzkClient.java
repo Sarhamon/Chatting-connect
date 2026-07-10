@@ -200,6 +200,7 @@ public final class ChzzkClient implements ChatClient {
         int cmd = obj.get("cmd").getAsInt();
         switch (cmd) {
             case 0 -> sendRaw(PONG);                              // 서버 PING → PONG 응답
+            case 10000 -> { }                                    // 서버 PONG(우리 PING 응답) — keepalive, 무시
             case 10100 -> {                                      // 접속 성공
                 reconnectAttempts = 0;
                 listener.onStatus("연결됨 · 채팅 수신을 시작합니다.");
